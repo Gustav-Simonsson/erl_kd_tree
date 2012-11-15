@@ -175,3 +175,37 @@ unit_test({X,Y, Coordinates, NeighbourCount}) ->
     io:format("Tree: ~p~n", [NNT]),
     NNL == NNT.
 
+profile(CoordCount, NNCount, ProfileType, Opts) ->
+    random:seed(),
+    Coords = [{N,
+               (random:uniform() * 180.0) - 90.0,
+               (random:uniform() * 360.0) - 180.0} ||
+                 N <- lists:seq(1, CoordCount)],
+    Generate = fun() -> kdtree(Coords, 0, 2) end,
+    {MS1, Tree} = timer:tc(Generate),
+    Bytes = erts_debug:flat_size(Tree) * 64,
+    SearchPoint = lists:nth(random:uniform(CoordCount), Coords),
+    FindNN = fun() -> nearest_neighbour(Tree, SearchPoint, NNCount, 2) end,
+    {MS2, _Result} = timer:tc(FindNN),
+    case ProfileType of
+        eprof ->
+            eprof:start(),
+            eprof:profile(FindNN),
+            eprof:analyze(),
+            eprof:stop();
+        fprof ->
+            fprof:start(),
+            fprof:trace(start),
+            FindNN(),
+            fprof:trace(stop),
+            fprof:profile(),
+            fprof:analyse(Opts),
+            fprof:stop();
+        _ ->
+            io:format("Coordinates count: ~p~n", [CoordCount]),
+            io:format("Nearest Neighbour count: ~p~n", [NNCount]),
+            io:format("k-d tree build time: ~p microseconds~n", [MS1]),
+            io:format("k-d tree size: ~p bytes~n", [Bytes]),
+            io:format("Nearest neighbour search time: ~p microseconds~n", [MS2])
+    end,
+    ok.
